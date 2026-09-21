@@ -1,0 +1,173 @@
+# ============================================================
+# AI Governance Bootstrap Manifest
+# ============================================================
+# This file contains everything that is safe to ship as static YAML:
+#   1. The AIPolicy CustomResourceDefinition (a schema — apply to any cluster)
+#   2. The generated AIPolicy resource for this workload
+#
+# NOT included, because these are running services, not static YAML:
+#   - The admission-controller (validates registries, injects the runtime sidecar)
+#   - The runtime-sidecar (enforces provider/model/token limits per request)
+# Without those deployed, this AIPolicy resource will be ACCEPTED by the
+# cluster but NOT ENFORCED. Deploy them first, e.g.:
+#   helm install aipolicy-admission ./ai-policy-platform/charts/aipolicy-admission \
+#     --namespace ai-policy-system --create-namespace
+# ============================================================
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: aipolicies.ai.policy.io
+spec:
+  group: ai.policy.io
+  scope: Namespaced
+  names:
+    kind: AIPolicy
+    plural: aipolicies
+    singular: aipolicy
+    shortNames:
+      - aip
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                selector:
+                  type: object
+                  properties:
+                    matchLabels:
+                      type: object
+                      additionalProperties:
+                        type: string
+                admission:
+                  type: object
+                  properties:
+                    allowedRegistries:
+                      type: array
+                      items:
+                        type: string
+                    requireSidecar:
+                      type: boolean
+                runtime:
+                  type: object
+                  properties:
+                    allowedProviders:
+                      type: array
+                      items:
+                        type: string
+                    allowedModels:
+                      type: array
+                      items:
+                        type: string
+                    maxInputTokens:
+                      type: integer
+                    maxOutputTokens:
+                      type: integer
+                    action:
+                      type: string
+                      enum: [block, warn, audit]
+                pricing:
+                  type: object
+                  properties:
+                    inputPerMillion:
+                      type: number
+                    outputPerMillion:
+                      type: number
+                thresholds:
+                  type: object
+                  properties:
+                    inputWarningPct:
+                      type: integer
+                    outputWarningPct:
+                      type: integer
+                    outputCriticalPct:
+                      type: integer
+                gpu:
+                  type: object
+                  properties:
+                    maxGPUs:
+                      type: integer
+                    allowedTypes:
+                      type: array
+                      items:
+                        type: string
+      additionalPrinterColumns:
+        - name: Max-Input
+          type: integer
+          jsonPath: .spec.runtime.maxInputTokens
+        - name: Max-Output
+          type: integer
+          jsonPath: .spec.runtime.maxOutputTokens
+        - name: Action
+          type: string
+          jsonPath: .spec.runtime.action
+        - name: Sidecar
+          type: boolean
+          jsonPath: .spec.admission.requireSidecar
+        - name: Max-GPUs
+          type: integer
+          jsonPath: .spec.gpu.maxGPUs
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+---
+apiVersion: ai.policy.io/v1alpha1
+kind: AIPolicy
+metadata:
+  name: helpdesk-chatbot-policy
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: helpdesk-chatbot
+  admission:
+    allowedRegistries:
+      - testhack.azurecr.io/*
+    requireSidecar: false
+  runtime:
+    allowedProviders:
+      - azure-ai-foundry
+    allowedModels:
+      []
+    maxInputTokens: 3000
+    maxOutputTokens: 1000
+  gpu:
+    allowedTypes:
+      []
+
+# ============================================================
+# Apply Instructions
+# ============================================================
+# 1. Apply this file (registers the CRD if needed, plus the policy):
+#      kubectl apply -f <this-file>.yaml
+#
+# 2. This policy only governs workloads in namespace 'default' whose pod
+#    labels match app: helpdesk-chatbot. Confirm your workload's pod
+#    template already carries that label (it does for the workload this was
+#    generated from).
+#
+# 3. This policy sets runtime restrictions (provider/model/token/GPU), which are
+#    enforced by a sidecar container the admission-controller injects. That
+#    injection ONLY happens on pods labeled:
+#      ai-policy.io/runtime: "enabled"
+#    Add that label to the pod template of your Deployment if it isn't
+#    already present — edit the Deployment 'helpdesk-chatbot' manifest itself
+#    (NOT this file) to include:
+#      spec:
+#        template:
+#          metadata:
+#            labels:
+#              ai-policy.io/runtime: "enabled"
+#    then apply that change and continue to step 4.
+#
+# 4. The sidecar is injected at pod CREATION time only — it will not retroactively
+#    attach to already-running pods. After applying this policy, restart the
+#    workload so new pods pick up the sidecar and its config:
+#      kubectl rollout restart deployment/helpdesk-chatbot -n default
+# ============================================================

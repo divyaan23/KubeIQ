@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+kubernetes==30.1.0
+azure-ai-projects==1.0.0
+azure-identity
+openai
+httpx
+python-dotenv
+pydantic

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Workload Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=3.4.0" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">AI POLICY PLATFORM</p>
+      <h1>KubeIQ Dashboard</h1>
+    </div>
+    <button id="refresh-button" class="refresh-button">Rescan with agent</button>
+  </header>
+
+  <section class="governance-portal" aria-labelledby="portal-heading">
+    <div class="portal-heading">
+      <p class="eyebrow">AGENT-POWERED DISCOVERY</p>
+      <h2 id="portal-heading">What this platform is focused on</h2>
+    </div>
+    <div class="portal-map" aria-label="Workload analyzer focus areas">
+      <div class="portal-ring" aria-hidden="true"></div>
+      <div class="portal-core">
+        <span class="core-mark"><i data-lucide="radar"></i></span>
+        <strong>AI Workload</strong>
+        <small>Analyzer</small>
+      </div>
+      <article class="portal-domain domain-discovery">
+        <span class="domain-icon"><i data-lucide="search"></i></span>
+        <span><strong>Discovery</strong><span id="portal-discovery">Scanning cluster...</span></span>
+      </article>
+      <article class="portal-domain domain-gpu-optimization">
+        <div class="domain-icon-group">
+          <button type="button" class="domain-icon domain-icon-trigger" id="portal-gpu-icon" title="Click here for GPU optimization sample">
+            <i data-lucide="cpu"></i>
+          </button>
+          <small class="domain-hint">Click here for GPU optimization</small>
+        </div>
+        <span>
+          <strong>GPU Optimization</strong>
+          <span id="portal-gpu">Sample recommendations</span>
+        </span>
+      </article>
+      <article class="portal-domain domain-tokenomics">
+        <div class="domain-icon-group">
+          <button type="button" class="domain-icon domain-icon-trigger" id="portal-tokenomics-icon" title="Click here for token optimization">
+            <i data-lucide="coins"></i>
+          </button>
+          <small class="domain-hint">Click here for token optimization</small>
+        </div>
+        <span>
+          <strong>Tokenomics</strong>
+          <span id="portal-tokenomics">Awaiting usage data</span>
+        </span>
+      </article>
+      <article class="portal-domain domain-recommendations">
+        <div class="domain-icon-group">
+          <button type="button" class="domain-icon domain-icon-trigger" id="portal-recommendations-icon" title="Click here to see policy enforcement for this workload">
+            <i data-lucide="file-check-2"></i>
+          </button>
+          <small class="domain-hint">Click for policy enforcement</small>
+        </div>
+        <span>
+          <strong>Policy Recommendations</strong>
+          <span id="portal-recommendations">No gaps found yet</span>
+        </span>
+        <button id="portal-generate-button" type="button" class="recommend-icon-button portal-generate-button" hidden>
+          <span aria-hidden="true">&#129668;</span><span>Generate policy for your AI workloads</span>
+        </button>
+      </article>
+    </div>
+  </section>
+
+  <section class="summary-grid">
+    <div class="summary-card">
+      <span>Workloads observed</span>
+      <b id="summary-total">--</b>
+    </div>
+    <div class="summary-card">
+      <span>Confirmed AI workloads</span>
+      <b id="summary-ai">--</b>
+    </div>
+    <div class="summary-card">
+      <span>Missing policy</span>
+      <b id="summary-unmanaged">--</b>
+    </div>
+    <div class="summary-card">
+      <span>GPU requested</span>
+      <b id="summary-gpu">--</b>
+    </div>
+  </section>
+
+  <section class="inventory-section">
+    <div class="section-header">
+      <div>
+        <p class="eyebrow">WORKLOAD INVENTORY</p>
+        <h2>Kubernetes workloads discovered across the cluster</h2>
+        <p class="table-legend">Provider/Model is the Foundry agent's best guess from manifest evidence, unless marked <span class="badge badge-ok">observed</span> — that means it was confirmed from real sidecar traffic instead, which always outranks the agent's guess.</p>
+        <p class="table-legend">Use &#129668; Generate policy for your AI workloads above to open the AI Policy Generator (review, refine with guidance, then apply yourself)</p>
+      </div>
+      <span id="last-updated" class="last-updated">Loading...</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Namespace</th>
+          <th>Workload</th>
+          <th>Image</th>
+          <th>AI Workload</th>
+          <th>Provider</th>
+          <th>Model</th>
+          <th>Confidence</th>
+          <th>GPU</th>
+          <th>Policy</th>
+        </tr>
+      </thead>
+      <tbody id="inventory">
+        <tr><td colspan="9" class="empty">Waiting for discovered workloads...</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div id="gpu-panel" class="policy-popover gpu-popover" hidden>
+    <div class="policy-modal-header">
+      <h3>GPU Optimization</h3>
+      <button id="gpu-close" class="policy-modal-close">Close</button>
+    </div>
+    <p class="policy-modal-note">Sample feature &mdash; this cluster has no GPU-backed nodes right now, so everything below is illustrative sample data, not live telemetry. Once GPU workloads run here, this would use real utilization/cost metrics instead.</p>
+
+    <div class="gpu-summary-grid">
+      <div class="summary-card">
+        <span>GPUs monitored (sample)</span>
+        <b>12</b>
+      </div>
+      <div class="summary-card">
+        <span>Utilization (sample)</span>
+        <b>78%</b>
+        <div class="gpu-bar"><div class="gpu-bar-fill" style="width: 78%"></div></div>
+      </div>
+      <div class="summary-card">
+        <span>Potentially underutilized</span>
+        <b>3 GPUs</b>
+      </div>
+      <div class="summary-card">
+        <span>Potential GPU waste (estimated)</span>
+        <b>1,280 GPU-hrs/mo</b>
+      </div>
+      <div class="summary-card">
+        <span>Optimization opportunities</span>
+        <b>7 workloads</b>
+      </div>
+    </div>
+
+    <div class="gpu-cards">
+      <article class="gpu-card">
+        <header>
+          <strong>document-summary</strong>
+          <span class="badge badge-missing">Underutilized</span>
+        </header>
+        <dl>
+          <div><dt>Model</dt><dd>Llama 8B</dd></div>
+          <div><dt>Current GPU</dt><dd>A100</dd></div>
+          <div><dt>GPU utilization</dt><dd>28%</dd></div>
+          <div><dt>Memory utilization</dt><dd>34%</dd></div>
+        </dl>
+        <p class="gpu-recommendation">Recommendation: Consider <strong>L40S</strong></p>
+        <p class="gpu-reason">Current GPU capacity is underutilized for observed workload characteristics.</p>
+      </article>
+
+      <article class="gpu-card">
+        <header>
+          <strong>customer-summary</strong>
+          <span class="badge badge-missing">Underutilized</span>
+        </header>
+        <dl>
+          <div><dt>Model</dt><dd>Llama 8B</dd></div>
+          <div><dt>Current GPU</dt><dd>A100</dd></div>
+          <div><dt>GPU utilization</dt><dd>24%</dd></div>
+          <div><dt>Memory utilization</dt><dd>31%</dd></div>
+          <div><dt>Requests/min</dt><dd>8</dd></div>
+        </dl>
+        <p class="gpu-recommendation">Recommendation: Move to <strong>L40S</strong></p>
+        <p class="gpu-reason">Expected (estimated): &#8595; GPU capacity &middot; &#8595; cost &middot; &#8776; workload requirement still met</p>
+      </article>
+
+      <article class="gpu-card">
+        <header>
+          <strong>batch-embeddings</strong>
+          <span class="badge badge-missing">Underutilized</span>
+        </header>
+        <dl>
+          <div><dt>Model</dt><dd>Embedding model</dd></div>
+          <div><dt>Current GPU</dt><dd>A100</dd></div>
+          <div><dt>GPU utilization</dt><dd>12%</dd></div>
+        </dl>
+        <p class="gpu-recommendation">Recommendation: Move to a <strong>smaller GPU</strong></p>
+        <p class="gpu-reason">Workload footprint doesn't need a full A100.</p>
+      </article>
+
+      <article class="gpu-card gpu-card-ok">
+        <header>
+          <strong>large-inference</strong>
+          <span class="badge badge-ok">Right-sized</span>
+        </header>
+        <dl>
+          <div><dt>Model</dt><dd>Llama 70B</dd></div>
+          <div><dt>Current GPU</dt><dd>L40S</dd></div>
+          <div><dt>GPU utilization</dt><dd>95%</dd></div>
+        </dl>
+        <p class="gpu-recommendation">Recommendation: Keep &mdash; evaluate <strong>A100/H100</strong> if traffic grows</p>
+        <p class="gpu-reason">Consistently high utilization; healthy fit for the current GPU.</p>
+      </article>
+    </div>
+  </div>
+
+  <div id="tokenomics-panel" class="policy-popover tokenomics-popover" hidden>
+    <div class="policy-modal-header">
+      <h3 id="tokenomics-title">Tokenomics</h3>
+      <button id="tokenomics-close" class="policy-modal-close">Close</button>
+    </div>
+    <p class="policy-modal-note" id="tokenomics-subtitle">Observed token usage and an agent-generated limit recommendation.</p>
+    <div class="policy-scope-detail">
+      <div><span>Workload</span><b id="tokenomics-workload">--</b></div>
+      <div><span>Namespace</span><b id="tokenomics-namespace">--</b></div>
+      <div><span>Generated</span><b id="tokenomics-generated-at">--</b></div>
+    </div>
+    <div class="governance-posture" aria-label="Token usage">
+      <div><span>Avg input</span><b id="tokenomics-avg-input">--</b></div>
+      <div><span>Avg output</span><b id="tokenomics-avg-output">--</b></div>
+      <div><span>Requests analyzed</span><b id="tokenomics-requests">--</b></div>
+      <div><span>Blocked attempts</span><b id="tokenomics-blocked">--</b></div>
+    </div>
+    <div id="tokenomics-distribution" class="governance-standards"></div>
+    <h4 class="tokenomics-history-heading">Request history (7-day)</h4>
+    <div class="tokenomics-history-wrap">
+      <table class="tokenomics-history-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Workload</th>
+            <th>Namespace</th>
+            <th>Input</th>
+            <th>Output</th>
+            <th>Status / Violation</th>
+          </tr>
+        </thead>
+        <tbody id="tokenomics-history"></tbody>
+      </table>
+    </div>
+    <div id="tokenomics-recommendation" class="governance-standards"></div>
+  </div>
+
+  <div id="governance-panel" class="policy-popover governance-popover" hidden>
+    <div class="policy-modal-header">
+      <h3 id="governance-title">Policy governance</h3>
+      <button id="governance-close" class="policy-modal-close">Close</button>
+    </div>
+    <p class="policy-modal-note" id="governance-subtitle">Snapshot of AIPolicy resources currently applied to scanned workloads.</p>
+    <div class="governance-posture" aria-label="Policy posture">
+      <div><span>Active policies</span><b id="governance-count">--</b></div>
+      <div><span>Workloads governed</span><b id="governance-governed">--</b></div>
+      <div><span>Missing policy</span><b id="governance-missing">--</b></div>
+    </div>
+    <div id="governance-standards" class="governance-standards"></div>
+  </div>
+
+  <div id="policy-modal" class="policy-popover" hidden>
+    <div class="policy-modal-header">
+      <h3 id="policy-modal-title">Recommended policy</h3>
+      <button id="policy-modal-close" class="policy-modal-close">Close</button>
+    </div>
+    <p class="policy-modal-note">Draft only — review, edit if needed, then apply yourself with <code>kubectl apply -f</code>. Nothing is applied automatically.</p>
+    <label class="policy-modal-label" for="policy-guidance">Guidance for the agent (optional)</label>
+    <textarea id="policy-guidance" placeholder="e.g. also allow gpt-4o-mini as a fallback, or tighten output tokens to 500"></textarea>
+    <button id="policy-generate-button" class="refresh-button">Generate</button>
+    <h4>Rationale</h4>
+    <ul id="policy-modal-rationale"></ul>
+    <h4>Generated AIPolicy YAML</h4>
+    <pre id="policy-modal-yaml">Click Generate to create a recommendation.</pre>
+    <div class="policy-modal-actions">
+      <button id="policy-modal-copy" class="refresh-button">Copy YAML</button>
+      <button id="policy-modal-download" class="refresh-button">Download YAML</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="/static/app.js?v=3.4.0"></script>
+</body>
+</html>

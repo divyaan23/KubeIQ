@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-workload-analyzer
+  namespace: ai-policy-system
+  annotations:
+    azure.workload.identity/client-id: ee7830b0-ae0e-46ab-9d7e-937f2aa093a7
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ai-workload-analyzer
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["ai.policy.io"]
+    resources: ["aipolicies"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ai-workload-analyzer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ai-workload-analyzer
+subjects:
+  - kind: ServiceAccount
+    name: ai-workload-analyzer
+    namespace: ai-policy-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-workload-analyzer
+  namespace: ai-policy-system
+  labels:
+    app: ai-workload-analyzer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-workload-analyzer
+  template:
+    metadata:
+      labels:
+        app: ai-workload-analyzer
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: ai-workload-analyzer
+      containers:
+        - name: workload-analyzer
+          image: testhack.azurecr.io/ai-workload-analyzer:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8091
+          env:
+            - name: AI_PROJECT_ENDPOINT
+              value: "https://helpdesk-capstone-foundry.services.ai.azure.com/api/projects/helpdesk-capstone-foundry-project"
+            - name: AI_ANALYZER_MODEL_DEPLOYMENT
+              value: "gpt-4o"
+            - name: TELEMETRY_DASHBOARD_URL
+              value: "http://aipolicy-telemetry-dashboard.ai-policy-system.svc.cluster.local:8090"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-workload-analyzer
+  namespace: ai-policy-system
+spec:
+  type: LoadBalancer
+  selector:
+    app: ai-workload-analyzer
+  ports:
+    - name: http
+      port: 8091
+      targetPort: http
